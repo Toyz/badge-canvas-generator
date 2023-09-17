@@ -1,5 +1,5 @@
 /target
-output.png
+output.*
 .zip
 *.exe
 *.dll
