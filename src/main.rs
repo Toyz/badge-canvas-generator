@@ -2,7 +2,7 @@ use image::{DynamicImage, ImageBuffer , RgbaImage};
 use reqwest;
 use std::path::Path;
 use tokio;
-use clap::Parser;
+use clap::{Parser, ArgGroup};
 
 mod models;
 mod api;
@@ -11,9 +11,13 @@ use api::fetch_avatar_profile_card;
 
 
 #[derive(Parser)]
+#[clap(group = ArgGroup::new("ArgGroup").required(true).multiple(false))]
 struct Opts {
-    #[arg(short, long, help = "The user ID")]
-    cid: i64,
+    #[arg(short, long, help = "The user ID", group = "ArgGroup")]
+    cid: Option<i64>,
+
+    #[clap(short = 'a', long, group = "ArgGroup", help = "The avatar name")]
+    avatar_name: Option<String>,
 
     #[arg(short, long, default_value = "canvas.png", help = "The output file name")]
     output: String,
@@ -23,7 +27,20 @@ struct Opts {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opts: Opts = Opts::parse();
 
-    let avatar_card = fetch_avatar_profile_card(opts.cid).await?;
+    let cid = match opts.avatar_name {
+        Some(ref avatar_name) => api::get_user_id_from_avatar_name(&avatar_name).await?,
+        None => {
+            match opts.cid {
+                Some(cid_value) => cid_value,
+                None => {
+                    eprintln!("Either --avatar_name or --cid must be provided!");
+                    std::process::exit(1);
+                }
+            }
+        }
+    };
+
+    let avatar_card = fetch_avatar_profile_card(cid).await?;
 
     // if badges is empty, print a message and return
     if avatar_card.badges.is_empty() {
@@ -40,10 +57,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
         let badge_dynamic_image = image::load_from_memory_with_format(&badge_image, image::ImageFormat::Gif)?.to_rgba8();
 
-        let x = badge_info.xloc;
-        let y = badge_info.yloc - 200;
+        // get the positon from the badge_positions vector
+        let item = avatar_card.badge_positions.iter().find(|(id, _, _)| id == &badge_info.to_id_string()).unwrap();
+        let x = item.1;
+        let y = item.2;
 
-        println!("Overlaying badge {} at ({}, {})", badge_info.to_id_string(), x, y);
+        println!("Overlaying badge {} at ({}, {}) ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
 
         image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
     }

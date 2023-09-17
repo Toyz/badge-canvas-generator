@@ -12,25 +12,41 @@ This tool fetches an IMVU user's badge canvas and creates a single unified image
 
 ## Usage
 
-1. Clone the repository:
-```
-git clone https://github.com/toyz/badge-canvas-generator.git
-```
+1. **Using User ID (CID)**
+    ```bash
+    cargo run -- -c [CID] -o [output_filename]
+    ```
 
-2. Navigate to the project directory and run:
-```
-cargo run --release -- -c YOUR_CID -o output.png
-```
-Replace `YOUR_CID` with the IMVU user CID for which you want to generate the badge canvas image.
+    - Replace `[CID]` with the user ID of the IMVU avatar.
+    - Replace `[output_filename]` with your desired output file name. If not provided, it defaults to `canvas.png`.
+
+2. **Using Avatar Name**
+    ```bash
+    cargo run -- -a [AVATAR_NAME] -o [output_filename]
+    ```
+
+    - Replace `[AVATAR_NAME]` with the name of the IMVU avatar.
+    - Replace `[output_filename]` with your desired output file name. If not provided, it defaults to `canvas.png`.
+
+**Note**: When using the avatar name, the tool internally fetches the CID using the given name and then generates the image.
 
 ## Requirements
 
-- Rust (latest version)
-- Access to the internet to fetch badges
+- Rust (latest stable version)
+- Other dependencies as listed in `Cargo.toml`
+
+## Build & Run
+
+Follow the standard Rust application build process:
+
+```bash
+cargo build --release
+./target/release/[binary_name] [arguments]
+```
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome! Feel free to check [issues page](https://github.com/yourusername/badge-canvas-generator/issues).
+Contributions, issues, and feature requests are welcome! Feel free to check [issues page](https://github.com/toyz/badge-canvas-generator/issues).
 
 ## License
 
