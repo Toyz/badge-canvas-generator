@@ -4,6 +4,8 @@ use reqwest;
 use std::path::Path;
 use tokio;
 use clap::{Parser, ArgGroup};
+use env_logger;
+use log::{debug, info, warn};
 
 mod models;
 mod api;
@@ -23,11 +25,25 @@ struct Opts {
 
     #[arg(short, long, default_value = "canvas.png", help = "The output file name")]
     output: String,
+
+    #[clap(short, long, help = "Enable verbose logging")]
+    verbose: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+
     let opts: Opts = Opts::parse();
+
+    if opts.verbose {
+        std::env::set_var("RUST_LOG", "debug");
+        env_logger::init();
+    } else {
+        std::env::set_var("RUST_LOG", "info");
+        env_logger::init();
+    }
+
+    debug!("Verbose logging enabled");
 
     let cid = match opts.avatar_name {
         Some(ref avatar_name) => api::get_user_id_from_avatar_name(&avatar_name).await?,
@@ -44,11 +60,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let avatar_card = fetch_avatar_profile_card(cid).await?;
 
+    info!("Avatar name: {}", avatar_card.avname);
+
     // if badges is empty, print a message and return
     if avatar_card.badges.is_empty() {
         println!("No badges found!");
         return Ok(());
     }
+
+    info!("Found {} badges", avatar_card.badges.len());
 
     let output_path = Path::new(&opts.output);
 
@@ -60,19 +80,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let x = badge_info.xloc;
         let y = if badge_info.yloc >= 200 {
+            warn!("Badge {} is off the bottom of the canvas, moving up", badge_info.to_id_string());
             badge_info.yloc - 200
         } else {
             badge_info.yloc
         };
 
-        println!("Overlaying badge {} at ({}, {}) ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
+        debug!("Overlaying badge {} at ({}, {}) ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
 
         image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
     }
 
     base_image.save(output_path)?;
 
-    println!("Image saved successfully!");
+    info!("Saved image to {}", output_path.display());
 
     Ok(())
 }
