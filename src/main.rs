@@ -37,11 +37,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if opts.verbose {
         std::env::set_var("RUST_LOG", "debug");
-        env_logger::init();
     } else {
         std::env::set_var("RUST_LOG", "info");
-        env_logger::init();
     }
+    env_logger::init();
 
     debug!("Verbose logging enabled");
 
