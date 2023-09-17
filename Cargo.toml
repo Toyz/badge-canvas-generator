@@ -21,3 +21,4 @@ dxr= "0.6.0"
 dxr_client = {version = "0.6.0", features = ["reqwest"]}
 log = "0.4.14"
 env_logger = "0.10.0"
+hex = "0.4.3"
