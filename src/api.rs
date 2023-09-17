@@ -1,6 +1,5 @@
 use crate::models::{BadgeInfo, AvatarProfileCard};
 use serde_json::Value;
-use scraper::Html;
 use dxr_client::{Client, ClientBuilder, Url, Call};
 
 pub async fn fetch_avatar_profile_card(cid: i64) -> Result<AvatarProfileCard, Box<dyn std::error::Error>> {

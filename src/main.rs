@@ -1,4 +1,5 @@
-use image::{DynamicImage, ImageBuffer , RgbaImage};
+use image::{DynamicImage, ImageBuffer , RgbaImage, ImageFormat};
+use std::io::{Cursor, Read};
 use reqwest;
 use std::path::Path;
 use tokio;
@@ -9,6 +10,7 @@ mod api;
 
 use api::fetch_avatar_profile_card;
 
+const BADGES_BACKGROUND: &[u8] = include_bytes!("badges_background.png");
 
 #[derive(Parser)]
 #[clap(group = ArgGroup::new("ArgGroup").required(true).multiple(false))]
@@ -75,7 +77,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn tile_image(input_path: &Path) -> Result<DynamicImage, image::ImageError> {
-    let img = image::open(input_path)?.to_rgba8();
+    let cursor = Cursor::new(BADGES_BACKGROUND);
+    let img = image::load(cursor, ImageFormat::Png)?;
     let mut output_img: RgbaImage = ImageBuffer::new(440, 100);
     for x in (0..440).step_by(40) {
         for y in (0..100).step_by(40) {
