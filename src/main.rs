@@ -1,5 +1,5 @@
 use image::{DynamicImage, ImageBuffer , RgbaImage, ImageFormat};
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use reqwest;
 use std::path::Path;
 use tokio;
@@ -50,19 +50,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    let input_path = Path::new("badges_background.png");
     let output_path = Path::new(&opts.output);
 
-    let mut base_image = tile_image(input_path)?;
+    let mut base_image = tile_image()?;
 
     for (_, badge_info) in &avatar_card.badges {
         let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
         let badge_dynamic_image = image::load_from_memory_with_format(&badge_image, image::ImageFormat::Gif)?.to_rgba8();
 
-        // get the positon from the badge_positions vector
-        let item = avatar_card.badge_positions.iter().find(|(id, _, _)| id == &badge_info.to_id_string()).unwrap();
-        let x = item.1;
-        let y = item.2;
+        let x = badge_info.xloc;
+        let y = if badge_info.yloc >= 200 {
+            badge_info.yloc - 200
+        } else {
+            badge_info.yloc
+        };
 
         println!("Overlaying badge {} at ({}, {}) ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
 
@@ -76,7 +77,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn tile_image(input_path: &Path) -> Result<DynamicImage, image::ImageError> {
+fn tile_image() -> Result<DynamicImage, image::ImageError> {
     let cursor = Cursor::new(BADGES_BACKGROUND);
     let img = image::load(cursor, ImageFormat::Png)?;
     let mut output_img: RgbaImage = ImageBuffer::new(440, 100);

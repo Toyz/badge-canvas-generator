@@ -32,5 +32,4 @@ pub struct AvatarProfileCard {
     pub avname: String,
     pub cid: i64,  // The user ID
     pub badges: Vec<(String, BadgeInfo)>,
-    pub badge_positions: Vec<(String, i64, i64)>,
 }
