@@ -58,6 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+
     let avatar_card = fetch_avatar_profile_card(cid).await?;
 
     info!("Avatar name: {}", avatar_card.avname);
@@ -71,6 +72,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Found {} badges", avatar_card.badges.len());
 
     let output_path = Path::new(&opts.output);
+
+    let image_format = match output_path.extension() {
+        Some(ext) if ext == "png" => ImageFormat::Png,
+        Some(ext) if ext == "jpg" || ext == "jpeg" => ImageFormat::Jpeg,
+        _ => {
+            log::error!("Unsupported output file format. Please use either .png or .jpg/.jpeg.");
+            return Ok(());
+        }
+    };
 
     let mut base_image = tile_image()?;
 
@@ -91,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
     }
 
-    base_image.save(output_path)?;
+    base_image.save_with_format(output_path, image_format)?;
 
     info!("Saved image to {}", output_path.display());
 
