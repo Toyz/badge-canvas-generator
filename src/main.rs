@@ -1,12 +1,10 @@
 use image::{DynamicImage, ImageFormat};
 use reqwest;
-use std::path::{Path, PathBuf};
-use std::fs;
+use std::path::{Path};
 use tokio;
 use clap::{Parser, ArgGroup};
 use env_logger;
 use log::{debug, error, info, warn};
-use url::Url;
 
 mod models;
 mod api;
@@ -88,31 +86,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    const CACHE_DIR: &str = "cache";
-
-// Ensure cache directory exists
-    if !Path::new(CACHE_DIR).exists() {
-        fs::create_dir(CACHE_DIR).unwrap_or_else(|_| panic!("Failed to create {} directory", CACHE_DIR));
-    }
-
     let mut base_image = tile_image(&opts.grid_color)?;
 
     for (_, badge_info) in &avatar_card.badges {
-        let badge_url = Url::parse(&badge_info.image_url).expect("Invalid URL");
-        let url_path = badge_url.path_segments().expect("Invalid URL path");
-        let file_name = url_path.last().expect("Invalid URL file name");
-
-        let cache_file_path = Path::new(CACHE_DIR).join(PathBuf::from(file_name));
-
-        let badge_image = if cache_file_path.exists() {
-            debug!("Loading badge from cache: {:?}", cache_file_path);
-            fs::read(&cache_file_path)?
-        } else {
-            debug!("Downloading badge: {}", badge_info.image_url);
-            let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
-            fs::write(&cache_file_path, &badge_image)?;
-            badge_image.to_vec()
-        };
+        let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
 
         let image_format = image::guess_format(&badge_image)?;
         let badge_dynamic_image = match image_format {
