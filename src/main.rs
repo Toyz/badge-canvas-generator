@@ -1,10 +1,12 @@
 use image::{DynamicImage, ImageFormat};
 use reqwest;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::fs;
 use tokio;
 use clap::{Parser, ArgGroup};
 use env_logger;
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
+use url::Url;
 
 mod models;
 mod api;
@@ -86,16 +88,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
+    const CACHE_DIR: &str = "cache";
+
+// Ensure cache directory exists
+    if !Path::new(CACHE_DIR).exists() {
+        fs::create_dir(CACHE_DIR).unwrap_or_else(|_| panic!("Failed to create {} directory", CACHE_DIR));
+    }
+
     let mut base_image = tile_image(&opts.grid_color)?;
 
     for (_, badge_info) in &avatar_card.badges {
-        let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
-        let badge_dynamic_image = image::load_from_memory_with_format(&badge_image, image::ImageFormat::Gif)?.to_rgba8();
+        let badge_url = Url::parse(&badge_info.image_url).expect("Invalid URL");
+        let url_path = badge_url.path_segments().expect("Invalid URL path");
+        let file_name = url_path.last().expect("Invalid URL file name");
+
+        let cache_file_path = Path::new(CACHE_DIR).join(PathBuf::from(file_name));
+
+        let badge_image = if cache_file_path.exists() {
+            debug!("Loading badge from cache: {:?}", cache_file_path);
+            fs::read(&cache_file_path)?
+        } else {
+            debug!("Downloading badge: {}", badge_info.image_url);
+            let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
+            fs::write(&cache_file_path, &badge_image)?;
+            badge_image.to_vec()
+        };
+
+        let image_format = image::guess_format(&badge_image)?;
+        let badge_dynamic_image = match image_format {
+            ImageFormat::Gif => {
+                debug!("Loading GIF badge {}", badge_info.to_id_string());
+                // Handle GIFs, maybe convert them or handle frames differently
+                image::load_from_memory_with_format(&badge_image, image::ImageFormat::Gif)?
+            },
+            ImageFormat::Png => {
+                debug!("Loading PNG badge {}", badge_info.to_id_string());
+                // Handle PNGs
+                image::load_from_memory_with_format(&badge_image, image::ImageFormat::Png)?
+            },
+            // Add cases for other formats if needed
+            _ => {
+                error!("Unexpected image format for badge {}. Using default loader.", badge_info.to_id_string());
+                image::load_from_memory(&badge_image)?
+            }
+        }.to_rgba8();
 
         let x = badge_info.xloc;
-        let y = if badge_info.yloc >= 200 {
-            warn!("Badge {} is off the bottom of the canvas, moving up", badge_info.to_id_string());
-            badge_info.yloc - 200
+        let y = if badge_info.yloc >= 100 {
+            warn!("Badge {} is below the canvas. Adjusting yloc to fit.", badge_info.to_id_string());
+
+            if badge_info.yloc >= 200 {
+                badge_info.yloc - 200
+            } else {
+                badge_info.yloc - 100
+            }
         } else {
             badge_info.yloc
         };
