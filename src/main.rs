@@ -1,4 +1,5 @@
-use image::{DynamicImage, ImageFormat};
+use image::{AnimationDecoder, DynamicImage, ImageFormat};
+use image::codecs::gif::GifDecoder;
 use reqwest;
 use std::path::{Path};
 use tokio;
@@ -32,13 +33,13 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    std::env::set_var("RUST_LOG", "info");
 
     let opts: Opts = Opts::parse();
 
     if opts.verbose {
         std::env::set_var("RUST_LOG", "debug");
     } else {
-        std::env::set_var("RUST_LOG", "info");
     }
     env_logger::init();
 
@@ -50,8 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             match opts.cid {
                 Some(cid_value) => cid_value,
                 None => {
-                    eprintln!("Either --avatar_name or --cid must be provided!");
-                    std::process::exit(1);
+                    return Err("No avatar name or user ID provided".into());
                 }
             }
         }
@@ -64,8 +64,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // if badges is empty, print a message and return
     if avatar_card.badges.is_empty() {
-        println!("No badges found!");
-        return Ok(());
+        return Err("No badges found".into());
     }
 
     info!("Found {} badges", avatar_card.badges.len());
@@ -81,8 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(ext) if ext == "png" => ImageFormat::Png,
         Some(ext) if ext == "jpg" || ext == "jpeg" => ImageFormat::Jpeg,
         _ => {
-            log::error!("Unsupported output file format. Please use either .png or .jpg/.jpeg.");
-            return Ok(());
+            return Err("Invalid output file extension. Supported extensions are: png, jpg, jpeg".into());
         }
     };
 
@@ -95,8 +93,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let badge_dynamic_image = match image_format {
             ImageFormat::Gif => {
                 debug!("Loading GIF badge {}", badge_info.to_id_string());
-                // Handle GIFs, maybe convert them or handle frames differently
-                image::load_from_memory_with_format(&badge_image, ImageFormat::Gif)?
+                let decoder = GifDecoder::new(&badge_image[..])?;
+                // get the middle frame
+                let frames = decoder.into_frames().collect_frames()?;
+                // get the frame in the middle
+                let middle_frame = frames[frames.len() / 2].clone();
+
+                // convert the frame to a RgbaImage and return it
+                DynamicImage::from(middle_frame.into_buffer())
             },
             ImageFormat::Png => {
                 debug!("Loading PNG badge {}", badge_info.to_id_string());
@@ -157,9 +161,9 @@ fn tile_image(grid_color_hex: &str) -> Result<image::DynamicImage, image::ImageE
             } else {
                 // If the color is light, darken the grid lines
                 grid_lines_color = [
-                    grid_color[0].saturating_sub(24),
-                    grid_color[1].saturating_sub(24),
-                    grid_color[2].saturating_sub(24),
+                    grid_color[0].saturating_sub(30),
+                    grid_color[1].saturating_sub(30),
+                    grid_color[2].saturating_sub(30),
                     0xFF
                 ];
             }
@@ -175,19 +179,17 @@ fn tile_image(grid_color_hex: &str) -> Result<image::DynamicImage, image::ImageE
     // Draw dashed grid lines with grid lines color
     for x in (0..438).step_by(20) {  // Adjusted to avoid overflowing the width
         for y in 0..100 {
-            if y % 10 < 6 {
+            if y % 10 < 5 {
                 // Vertical lines 1.5px wide
                 image.put_pixel(x, y, image::Rgba(grid_lines_color));
-                image.put_pixel(x + 1, y, image::Rgba(grid_lines_color));
             }
         }
     }
     for y in (0..94).step_by(20) {  // Adjusted to avoid overflowing the height
         for x in 0..440 {
-            if x % 10 < 6 {
+            if x % 10 < 5 {
                 // Horizontal lines 1.5px wide
                 image.put_pixel(x, y, image::Rgba(grid_lines_color));
-                image.put_pixel(x, y + 1, image::Rgba(grid_lines_color));
             }
         }
     }
