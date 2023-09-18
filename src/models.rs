@@ -24,6 +24,10 @@ impl BadgeInfo {
     pub fn to_id_string(&self) -> String {
         format!("badge-{}-{}", self.creator_id, self.creator_badge_index)
     }
+
+    pub fn to_offset_location(&self) -> (i64, i64) {
+        (self.xloc, self.yloc % 100)
+    }
 }
 
 // Define the AvatarProfileCard struct

@@ -96,24 +96,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ImageFormat::Gif => {
                 debug!("Loading GIF badge {}", badge_info.to_id_string());
                 // Handle GIFs, maybe convert them or handle frames differently
-                image::load_from_memory_with_format(&badge_image, image::ImageFormat::Gif)?
+                image::load_from_memory_with_format(&badge_image, ImageFormat::Gif)?
             },
             ImageFormat::Png => {
                 debug!("Loading PNG badge {}", badge_info.to_id_string());
                 // Handle PNGs
-                image::load_from_memory_with_format(&badge_image, image::ImageFormat::Png)?
+                image::load_from_memory_with_format(&badge_image, ImageFormat::Png)?
             },
             // Add cases for other formats if needed
             _ => {
-                error!("Unexpected image format for badge {}. Using default loader.", badge_info.to_id_string());
-                image::load_from_memory(&badge_image)?
+                error!("Unexpected image format ({:?}) for badge {}. Skipping this image.", image_format, badge_info.to_id_string());
+                continue;
             }
         }.to_rgba8();
 
-        let x = badge_info.xloc;
-        let y = badge_info.yloc % 100;
+        let (x, y) = badge_info.to_offset_location();
 
-        debug!("Overlaying badge {} at ({}, {}) ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
+        debug!("Overlaying badge {} at Cur: ({}, {}) Org: ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
 
         image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
     }
