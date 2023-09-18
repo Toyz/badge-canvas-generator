@@ -4,7 +4,7 @@ use std::path::{Path};
 use tokio;
 use clap::{Parser, ArgGroup};
 use env_logger;
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 
 mod models;
 mod api;
@@ -111,17 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }.to_rgba8();
 
         let x = badge_info.xloc;
-        let y = if badge_info.yloc >= 100 {
-            warn!("Badge {} is below the canvas. Adjusting yloc to fit.", badge_info.to_id_string());
-
-            if badge_info.yloc >= 200 {
-                badge_info.yloc - 200
-            } else {
-                badge_info.yloc - 100
-            }
-        } else {
-            badge_info.yloc
-        };
+        let y = badge_info.yloc % 100;
 
         debug!("Overlaying badge {} at ({}, {}) ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
 
