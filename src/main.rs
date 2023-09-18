@@ -1,4 +1,4 @@
-use image::{AnimationDecoder, DynamicImage, ImageFormat};
+use image::{AnimationDecoder, DynamicImage, ImageFormat, RgbaImage};
 use image::codecs::gif::GifDecoder;
 use reqwest;
 use std::path::{Path};
@@ -11,6 +11,7 @@ mod models;
 mod api;
 
 use api::fetch_avatar_profile_card;
+use crate::models::BadgeInfo;
 
 #[derive(Parser)]
 #[clap(group = ArgGroup::new("ArgGroup").required(true).multiple(false))]
@@ -86,6 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut base_image = tile_image(&opts.grid_color)?;
 
+    /*
     for (_, badge_info) in &avatar_card.badges {
         let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
 
@@ -119,6 +121,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         debug!("Overlaying badge {} at Cur: ({}, {}) Org: ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
 
         image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
+    }*/
+
+    let mut tasks = Vec::new();
+    for (_, badge_info) in &avatar_card.badges {
+        let badge_info_clone = badge_info.clone(); // Clone the badge info
+        // Spawn tasks with the cloned data
+        let task = tokio::spawn(download_and_process(badge_info_clone));
+        tasks.push(task);        
+    }
+
+    for task in tasks {
+        // 3. Gather results and overlay
+        match task.await {
+            Ok(Ok(data)) => {
+                let (badge_dynamic_image, id, (x, y), (badge_xloc, badge_yloc)) = data;
+                debug!("Overlaying badge {} at Cur: ({}, {}) Org: ({}, {})", id, x, y, badge_xloc, badge_yloc);
+                image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
+            },
+            Ok(Err(e)) => {
+                // handle download/process error
+                error!("Error processing image: {}", e);
+            },
+            Err(e) => {
+                // handle task error
+                error!("Task failed: {}", e);
+            }
+        }
     }
 
     base_image.save_with_format(output_path, image_format)?;
@@ -195,4 +224,30 @@ fn tile_image(grid_color_hex: &str) -> Result<image::DynamicImage, image::ImageE
     }
 
     Ok(DynamicImage::ImageRgba8(image))
+}
+
+async fn download_and_process(badge_info: BadgeInfo) -> Result<(RgbaImage, String, (i64, i64), (i64, i64)), anyhow::Error> {
+    let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
+    let image_format = image::guess_format(&badge_image)?;
+
+    let badge_dynamic_image = match image_format {
+        ImageFormat::Gif => {
+            debug!("Loading GIF badge {}", badge_info.to_id_string());
+            let decoder = GifDecoder::new(&badge_image[..])?;
+            let frames = decoder.into_frames().collect_frames()?;
+            let middle_frame = frames[frames.len() / 2].clone();
+            DynamicImage::from(middle_frame.into_buffer())
+        },
+        ImageFormat::Png => {
+            debug!("Loading PNG badge {}", badge_info.to_id_string());
+            image::load_from_memory_with_format(&badge_image, ImageFormat::Png)?
+        },
+        _ => {
+            error!("Unexpected image format ({:?}) for badge {}. Skipping this image.", image_format, badge_info.to_id_string());
+            return Err(anyhow::anyhow!("Unexpected image format"));
+        }
+    }.to_rgba8();
+
+    let (x, y) = badge_info.to_offset_location();
+    Ok((badge_dynamic_image, badge_info.to_id_string(), (x, y), (badge_info.xloc, badge_info.yloc)))
 }

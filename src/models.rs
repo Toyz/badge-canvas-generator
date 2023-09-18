@@ -2,7 +2,7 @@ use serde::{Serialize, Deserialize};
 use std::fmt;
 
 // Define the BadgeInfo struct
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct BadgeInfo {
     pub name: String,
     pub creator_id: i64,
