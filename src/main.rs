@@ -2,6 +2,7 @@ use image::{AnimationDecoder, DynamicImage, ImageFormat, RgbaImage};
 use image::codecs::gif::GifDecoder;
 use reqwest;
 use std::path::{Path};
+use std::sync::Arc;
 use tokio;
 use clap::{Parser, ArgGroup};
 use env_logger;
@@ -30,6 +31,9 @@ struct Opts {
 
     #[arg(short, long, help = "Grid hex color. Example: 'ececec'", default_value = "ececec")]
     grid_color: String,
+
+    #[arg(short='j', long, help = "Number of concurrent tasks. Defaults to number of cores. Use 'auto' for default behavior.", default_value = "auto")]
+    concurrency: String,
 }
 
 #[tokio::main]
@@ -56,6 +60,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
+    };
+
+    let default_concurrency = num_cpus::get();
+    let concurrency: usize = if opts.concurrency == "auto" {
+        default_concurrency
+    } else {
+        opts.concurrency.parse().unwrap_or(default_concurrency)
     };
 
 
@@ -87,49 +98,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut base_image = tile_image(&opts.grid_color)?;
 
-    /*
-    for (_, badge_info) in &avatar_card.badges {
-        let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
-
-        let image_format = image::guess_format(&badge_image)?;
-        let badge_dynamic_image = match image_format {
-            ImageFormat::Gif => {
-                debug!("Loading GIF badge {}", badge_info.to_id_string());
-                let decoder = GifDecoder::new(&badge_image[..])?;
-                // get the middle frame
-                let frames = decoder.into_frames().collect_frames()?;
-                // get the frame in the middle
-                let middle_frame = frames[frames.len() / 2].clone();
-
-                // convert the frame to a RgbaImage and return it
-                DynamicImage::from(middle_frame.into_buffer())
-            },
-            ImageFormat::Png => {
-                debug!("Loading PNG badge {}", badge_info.to_id_string());
-                // Handle PNGs
-                image::load_from_memory_with_format(&badge_image, ImageFormat::Png)?
-            },
-            // Add cases for other formats if needed
-            _ => {
-                error!("Unexpected image format ({:?}) for badge {}. Skipping this image.", image_format, badge_info.to_id_string());
-                continue;
-            }
-        }.to_rgba8();
-
-        let (x, y) = badge_info.to_offset_location();
-
-        debug!("Overlaying badge {} at Cur: ({}, {}) Org: ({}, {})", badge_info.to_id_string(), x, y, badge_info.xloc, badge_info.yloc);
-
-        image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
-    }*/
 
     let mut tasks = Vec::new();
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
     for (_, badge_info) in &avatar_card.badges {
         let badge_info_clone = badge_info.clone(); // Clone the badge info
-        // Spawn tasks with the cloned data
-        let task = tokio::spawn(download_and_process(badge_info_clone));
-        tasks.push(task);        
+        let sema_clone = Arc::clone(&semaphore); // Clone the Arc outside of the spawned block
+
+        let handle = tokio::spawn(async move {
+            let permit = sema_clone.acquire().await;
+            // Drop the permit when the task is done
+            let _permit_guard = permit;
+
+            download_and_process(badge_info_clone).await
+        });
+        tasks.push(handle);
     }
+
 
     for task in tasks {
         // 3. Gather results and overlay
