@@ -2,6 +2,8 @@
 name = "imvu-canvas-downloader"
 version = "0.1.0"
 edition = "2021"
+authors = ["Toyz"]
+description = "A tool to download IMVU canvas images and generate a single image."
 
 [profile.release]
 strip = true  # Automatically strip symbols from the binary.

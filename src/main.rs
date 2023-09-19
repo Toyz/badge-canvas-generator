@@ -16,20 +16,21 @@ use crate::models::BadgeInfo;
 
 #[derive(Parser)]
 #[clap(group = ArgGroup::new("ArgGroup").required(true).multiple(false))]
+#[clap(author = "Toyz", version, about, long_about = None)]
 struct Opts {
-    #[arg(short, long, help = "The user ID", group = "ArgGroup")]
+    #[arg(short='c', long, help = "The user ID", group = "ArgGroup")]
     cid: Option<i64>,
 
-    #[clap(short = 'a', long, group = "ArgGroup", help = "The avatar name")]
+    #[arg(short='a', long, group = "ArgGroup", help = "The avatar name")]
     avatar_name: Option<String>,
 
-    #[arg(short, long, help = "The output file name")]
+    #[arg(short='o', long, help = "The output file name")]
     output: Option<String>,
 
-    #[clap(short, long, help = "Enable verbose logging")]
+    #[arg(short='v', long, help = "Enable verbose logging")]
     verbose: bool,
 
-    #[arg(short, long, help = "Grid hex color. Example: 'ececec'", default_value = "ececec")]
+    #[arg(short='g', long, help = "Grid hex color. Example: 'ececec'", default_value = "ececec")]
     grid_color: String,
 
     #[arg(short='j', long, help = "Number of concurrent tasks. Defaults to number of cores. Use 'auto' for default behavior.", default_value = "auto")]
