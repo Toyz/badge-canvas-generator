@@ -16,7 +16,7 @@ use crate::models::BadgeInfo;
 
 #[derive(Parser)]
 #[clap(group = ArgGroup::new("ArgGroup").required(true).multiple(false))]
-#[clap(author = "Toyz", version, about, long_about = None)]
+#[clap(author = "Toyz", version, about, long_about = None, name = "Badge Canvas Generator")]
 struct Opts {
     #[arg(short='c', long, help = "The user ID", group = "ArgGroup")]
     cid: Option<i64>,
