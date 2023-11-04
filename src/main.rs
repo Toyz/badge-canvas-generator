@@ -7,12 +7,23 @@ use tokio;
 use clap::{Parser, ArgGroup};
 use env_logger;
 use log::{debug, error, info};
+use tokio::task::JoinHandle;
 
 mod models;
 mod api;
 
 use api::fetch_avatar_profile_card;
 use crate::models::BadgeInfo;
+
+#[derive(Debug)]
+struct ProcessedBadge {
+    badge_dynamic_image: RgbaImage,
+    id: String,
+    x: i64,
+    y: i64,
+    badge_xloc: i64,
+    badge_yloc: i64,
+}
 
 #[derive(Parser)]
 #[clap(group = ArgGroup::new("ArgGroup").required(true).multiple(false))]
@@ -99,31 +110,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut base_image = tile_image(&opts.grid_color)?;
 
-
-    let mut tasks = Vec::new();
+    let mut tasks: Vec<JoinHandle<Result<ProcessedBadge, anyhow::Error>>> = Vec::with_capacity(avatar_card.badges.len());
     let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
-    for (_, badge_info) in &avatar_card.badges {
-        let badge_info_clone = badge_info.clone(); // Clone the badge info
-        let sema_clone = Arc::clone(&semaphore); // Clone the Arc outside of the spawned block
+
+    for i in 0..avatar_card.badges.len(){
+        let item = avatar_card.badges.get(i).unwrap().clone();
+
+        let sema_clone = Arc::clone(&semaphore);
 
         let handle = tokio::spawn(async move {
             let permit = sema_clone.acquire().await;
-            // Drop the permit when the task is done
             let _permit_guard = permit;
 
-            download_and_process(badge_info_clone).await
+            download_and_process(item.1).await
         });
+
         tasks.push(handle);
     }
-
 
     for task in tasks {
         // 3. Gather results and overlay
         match task.await {
             Ok(Ok(data)) => {
-                let (badge_dynamic_image, id, (x, y), (badge_xloc, badge_yloc)) = data;
-                debug!("Overlaying badge {} at Cur: ({}, {}) Org: ({}, {})", id, x, y, badge_xloc, badge_yloc);
-                image::imageops::overlay(&mut base_image, &badge_dynamic_image, x, y);
+                debug!("Overlaying badge {} at Cur: ({}, {}) Org: ({}, {})", data.id, data.x, data.y, data.badge_xloc, data.badge_yloc);
+                image::imageops::overlay(&mut base_image, &data.badge_dynamic_image, data.x, data.y);
             },
             Ok(Err(e)) => {
                 // handle download/process error
@@ -212,7 +222,7 @@ fn tile_image(grid_color_hex: &str) -> Result<image::DynamicImage, image::ImageE
     Ok(DynamicImage::ImageRgba8(image))
 }
 
-async fn download_and_process(badge_info: BadgeInfo) -> Result<(RgbaImage, String, (i64, i64), (i64, i64)), anyhow::Error> {
+async fn download_and_process(badge_info: BadgeInfo) -> Result<ProcessedBadge, anyhow::Error> {
     let badge_image = reqwest::get(&badge_info.image_url).await?.bytes().await?;
     let image_format = image::guess_format(&badge_image)?;
 
@@ -235,5 +245,13 @@ async fn download_and_process(badge_info: BadgeInfo) -> Result<(RgbaImage, Strin
     }.to_rgba8();
 
     let (x, y) = badge_info.to_offset_location();
-    Ok((badge_dynamic_image, badge_info.to_id_string(), (x, y), (badge_info.xloc, badge_info.yloc)))
+
+    Ok(ProcessedBadge {
+        badge_dynamic_image,
+        id: badge_info.to_id_string(),
+        x,
+        y,
+        badge_xloc: badge_info.xloc,
+        badge_yloc: badge_info.yloc,
+    })
 }
